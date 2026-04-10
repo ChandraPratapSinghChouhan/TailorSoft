@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Tailor Pro FINAL</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<style>
+body{font-family:Arial;background:#0f172a;color:white;text-align:center;}
+input,button{padding:8px;margin:4px;border-radius:6px;border:none;}
+button{background:#22c55e;color:white;cursor:pointer;}
+.table{width:100%;border-collapse:collapse;}
+td,th{padding:6px;border-bottom:1px solid #444;}
+#adminPanel,#clientPanel{display:none;}
+</style>
+</head>
+
+<body>
+
+<h2>Tailor Pro FINAL</h2>
+
+<div id="loginPanel">
+<input id="pass" placeholder="Password">
+<button onclick="login()">Login</button>
+</div>
+
+<div id="adminPanel">
+<h3>Admin Panel</h3>
+
+<input id="shopId" placeholder="Shop ID">
+<input id="shopNameInput" placeholder="Shop Name">
+<input id="shopPhoneInput" placeholder="Phone">
+<input id="shopAddressInput" placeholder="Address">
+
+<button onclick="saveShop()">Save Shop</button>
+
+<table class="table">
+<thead><tr><th>ID</th><th>Name</th><th>Total</th><th>Open</th></tr></thead>
+<tbody id="shopTable"></tbody>
+</table>
+</div>
+
+<div id="clientPanel">
+
+<h2 id="shopName"></h2>
+<p id="shopPhone"></p>
+<p id="shopAddress"></p>
+<h3 id="totalClients"></h3>
+
+<input id="searchInput" placeholder="Search..." style="width:95%;font-size:18px;">
+
+<br>
+
+<input id="nameInput" placeholder="Name">
+<input id="mobileInput" placeholder="Mobile">
+<input id="serialInput" placeholder="Book No">
+<input type="file" id="imageInput">
+
+<button onclick="saveClient()">Save Client</button>
+
+<table class="table">
+<thead><tr><th>Name</th><th>Mobile</th><th>Book</th><th>Img</th><th>Action</th></tr></thead>
+<tbody id="clientTable"></tbody>
+</table>
+
+</div>
+
+<script>
+
+// FIREBASE
+firebase.initializeApp({
+  apiKey: "AIzaSyDbsDvPCUFBa39if7C3enHePG86fNSfEP4",
+  authDomain: "tailorapp-d1d19.firebaseapp.com",
+  projectId: "tailorapp-d1d19"
+});
+let db = firebase.firestore();
+
+// GLOBALS
+let currentShop="";
+let editId=null;
+
+/* LOGIN */
+function login(){
+ if(pass.value==="admin123"){
+   loginPanel.style.display="none";
+   adminPanel.style.display="block";
+   loadShops();
+ } else alert("Wrong Password");
+}
+
+/* SAVE SHOP */
+async function saveShop(){
+ try{
+  await db.collection("shops").add({
+    id:shopId.value,
+    name:shopNameInput.value,
+    phone:shopPhoneInput.value,
+    address:shopAddressInput.value
+  });
+  alert("Shop Saved ✅");
+  loadShops();
+ }catch(e){
+  alert("Error: "+e.message);
+ }
+}
+
+/* LOAD SHOPS */
+async function loadShops(){
+ let snap=await db.collection("shops").get();
+ let html="";
+ for(let d of snap.docs){
+   let s=d.data();
+   let c=await db.collection("clients").where("shop","==",s.id).get();
+   html+=`<tr>
+     <td>${s.id}</td>
+     <td>${s.name}</td>
+     <td>${c.size}</td>
+     <td><button onclick="openShop('${s.id}','${s.name}','${s.phone}','${s.address}')">Open</button></td>
+   </tr>`;
+ }
+ shopTable.innerHTML=html;
+}
+
+/* OPEN SHOP */
+function openShop(id,name,phone,address){
+ currentShop=id;
+ adminPanel.style.display="none";
+ clientPanel.style.display="block";
+ shopName.innerText=name;
+ shopPhone.innerText=phone;
+ shopAddress.innerText=address;
+ loadClients();
+}
+
+/* IMAGE UPLOAD */
+function uploadImage(file){
+ return new Promise((resolve,reject)=>{
+  let fd=new FormData();
+  fd.append("file",file);
+  fd.append("upload_preset","unsigned_preset");
+
+  fetch("https://api.cloudinary.com/v1_1/da1m4wmdb/image/upload",{method:"POST",body:fd})
+  .then(r=>r.json())
+  .then(d=>{
+    if(d.secure_url) resolve(d.secure_url);
+    else reject("Upload failed");
+  })
+  .catch(()=>reject("Upload error"));
+ });
+}
+
+/* SAVE CLIENT */
+async function saveClient(){
+ try{
+  let file=imageInput.files[0];
+  let imageUrl="";
+
+  if(file){
+    alert("Uploading Image...");
+    imageUrl = await uploadImage(file);
+  }
+
+  let obj={
+    shop:currentShop,
+    name:nameInput.value,
+    mobile:mobileInput.value,
+    serial:serialInput.value,
+    image:imageUrl
+  };
+
+  if(editId){
+    await db.collection("clients").doc(editId).update(obj);
+    editId=null;
+  } else {
+    await db.collection("clients").add(obj);
+  }
+
+  alert("Client Saved ✅");
+  loadClients();
+
+ }catch(e){
+  alert("Error: "+e);
+ }
+}
+
+/* LOAD CLIENT */
+async function loadClients(){
+ let snap=await db.collection("clients").where("shop","==",currentShop).get();
+
+ let arr=[];
+ snap.forEach(d=>arr.push({...d.data(),id:d.id}));
+
+ totalClients.innerText="Total Clients: "+arr.length;
+
+ arr=arr.slice(-10).reverse();
+
+ let html="";
+ arr.forEach(r=>{
+   html+=`<tr>
+     <td>${r.name}</td>
+     <td>${r.mobile}</td>
+     <td>${r.serial}</td>
+     <td>${r.image?`<img src="${r.image}" width="40">`:""}</td>
+     <td>
+       <button onclick='editClient(${JSON.stringify(r)})'>✏️</button>
+       <button onclick="deleteClient('${r.id}')">🗑️</button>
+     </td>
+   </tr>`;
+ });
+
+ clientTable.innerHTML=html;
+}
+
+/* EDIT */
+function editClient(r){
+ nameInput.value=r.name;
+ mobileInput.value=r.mobile;
+ serialInput.value=r.serial;
+ editId=r.id;
+}
+
+/* DELETE */
+async function deleteClient(id){
+ await db.collection("clients").doc(id).delete();
+ loadClients();
+}
+
+/* SEARCH */
+searchInput.oninput=async function(){
+ let v=this.value.toLowerCase();
+ let snap=await db.collection("clients").where("shop","==",currentShop).get();
+
+ let html="";
+ snap.forEach(d=>{
+   let r=d.data();
+   if(r.name.toLowerCase().includes(v)||r.mobile.includes(v)||r.serial.includes(v)){
+     html+=`<tr><td>${r.name}</td><td>${r.mobile}</td><td>${r.serial}</td></tr>`;
+   }
+ });
+ clientTable.innerHTML=html;
+};
+
+</script>
+
+</body>
+</html>
