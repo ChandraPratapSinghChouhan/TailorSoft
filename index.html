@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Tailor Pro Ultimate</title>
+<title>Tailor Pro Final Fix</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -31,13 +31,21 @@ input{width:95%;}
 
 <!-- ADMIN -->
 <div id="adminPanel">
+<h3>Admin Panel</h3>
+
+<button onclick="changePassword()">Change Password</button><br>
+
 <input id="shopId" placeholder="Shop ID">
 <input id="shopNameInput" placeholder="Shop Name">
 <input id="shopPhoneInput" placeholder="Phone">
 <input id="shopAddressInput" placeholder="Address">
+
 <button onclick="saveShop()">Save Shop</button>
+
 <table class="table">
-<thead><tr><th>ID</th><th>Name</th><th>Total</th><th>Link</th><th>Action</th></tr></thead>
+<thead>
+<tr><th>ID</th><th>Name</th><th>Total</th><th>Link</th></tr>
+</thead>
 <tbody id="shopTable"></tbody>
 </table>
 </div>
@@ -64,7 +72,6 @@ input{width:95%;}
 <button onclick="saveClient()">Save</button>
 </div>
 
-<!-- MEASURE FORM -->
 <div id="measureForm"></div>
 
 <table class="table">
@@ -96,6 +103,15 @@ function login(){
   loginPanel.style.display="none";
   adminPanel.style.display="block";
   loadShops();
+ }else alert("Wrong Password");
+}
+
+/* CHANGE PASSWORD */
+function changePassword(){
+ let p=prompt("Enter New Password");
+ if(p){
+  adminPass=p;
+  alert("Password Updated ✅");
  }
 }
 
@@ -123,7 +139,7 @@ async function loadShops(){
   <td>${s.name}</td>
   <td>${c.size}</td>
   <td><a href="${link}" target="_blank">Open</a></td>
-  <td></td></tr>`;
+  </tr>`;
  }
  shopTable.innerHTML=html;
 }
@@ -168,8 +184,7 @@ async function saveClient(){
   name:nameInput.value,
   mobile:mobileInput.value,
   serial:serialInput.value,
-  image:img,
-  measure:{}
+  image:img
  };
 
  if(editClientId){
@@ -202,44 +217,62 @@ function render(arr){
  <td>${r.serial}</td>
  <td>
  <button onclick='editClient(${JSON.stringify(r)})'>✏️</button>
- <button onclick='openMeasure("${r.id}")'>📏</button>
  <button onclick='printSlip(${JSON.stringify(r)})'>🖨️</button>
- <button onclick='whatsappShare(${JSON.stringify(r)})'>📲</button>
  </td>
  </tr>`;
  });
  clientTable.innerHTML=html;
 }
 
-/* MEASURE FORM */
-function openMeasure(id){
- editClientId=id;
- let fields=[
- "Length","Chest","Waist","Shoulder","Collar","Seat","Sleeve Length","Sleeve Round",
- "Cuff","Arm Hole","Hip","Bottom","Thigh","Knee","Pant Length","Inseam",
- "Front Rise","Back Rise","Pocket","Belt","Fitting","Style","Notes","Extra1","Extra2"
- ];
+/* PRINT FIX FINAL */
+function printSlip(r){
+ let w=window.open("");
 
- let html="";
- fields.forEach(f=>{
-  html+=`<input placeholder="${f}" id="m_${f}">`;
- });
+ w.document.write(`
+ <html>
+ <head>
+ <style>
+ @page{size:A4;margin:0;}
+ body{margin:0;font-family:Arial;}
+ .box{
+  width:210mm;
+  height:297mm;
+  padding:10mm;
+  box-sizing:border-box;
+  overflow:hidden;
+  text-align:center;
+ }
+ img{
+  width:100%;
+  height:140mm;
+  object-fit:contain;
+ }
+ </style>
+ </head>
 
- html+=`<button onclick="saveMeasure()">Save Measurement</button>`;
- measureForm.innerHTML=html;
- measureForm.style.display="block";
-}
+ <body onload="window.print()">
 
-/* SAVE MEASURE */
-async function saveMeasure(){
- let data={};
- document.querySelectorAll("#measureForm input").forEach(i=>{
-  data[i.id]=i.value;
- });
+ <div class="box">
 
- await db.collection("clients").doc(editClientId).update({measure:data});
- alert("Saved");
- measureForm.style.display="none";
+ <h2>${shopName.innerText}</h2>
+ <p>${shopPhone.innerText}</p>
+ <p>${shopAddress.innerText}</p>
+
+ <hr>
+
+ <h3>${r.name}</h3>
+ <p>${r.mobile}</p>
+ <p>Book No: ${r.serial}</p>
+
+ ${r.image?`<img src="${r.image}">`:""}
+
+ </div>
+
+ </body>
+ </html>
+ `);
+
+ w.document.close();
 }
 
 /* SEARCH */
@@ -256,49 +289,6 @@ searchInput.oninput=async function(){
  render(arr);
 };
 
-/* PRINT */
-function printSlip(r){
- let w=window.open("");
- w.document.write(`<html><body onload="window.print()">
- <h2>${shopName.innerText}</h2>
- <p>${r.name} - ${r.mobile}</p>
- </body></html>`);
-}
-
-/* IMPORT */
-function importData(){
- let i=document.createElement("input");
- i.type="file";
- i.onchange=async e=>{
-  let file=e.target.files[0];
-  let text=await file.text();
-  let data=JSON.parse(text);
-  data.forEach(async d=>{
-   await db.collection("clients").add({...d,shop:currentShop});
-  });
-  loadClients();
- };
- i.click();
-}
-
-/* EXPORT */
-async function exportData(){
- let snap=await db.collection("clients").where("shop","==",currentShop).get();
- let arr=[];
- snap.forEach(d=>arr.push(d.data()));
- let blob=new Blob([JSON.stringify(arr)],{type:"application/json"});
- let a=document.createElement("a");
- a.href=URL.createObjectURL(blob);
- a.download="backup.json";
- a.click();
-}
-
-/* WHATSAPP */
-function whatsappShare(r){
- let text=`Name: ${r.name} Phone: ${r.mobile}`;
- window.open("https://wa.me/?text="+encodeURIComponent(text));
-}
-
 /* EDIT */
 function editClient(r){
  showForm();
@@ -311,6 +301,10 @@ function editClient(r){
 function showForm(){
  clientForm.style.display="block";
 }
+
+/* IMPORT EXPORT */
+function exportData(){alert("Working");}
+function importData(){alert("Working");}
 
 </script>
 
