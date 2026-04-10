@@ -2,39 +2,37 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Tailor Pro Final</title>
+<title>Tailor Pro</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
 <style>
-body{font-family:Arial;background:#0f172a;color:white;text-align:center;}
+body{font-family:Arial;background:#0f172a;color:white;text-align:center;margin:0;}
 input,button{padding:10px;margin:5px;border-radius:6px;border:none;}
 button{background:#22c55e;color:white;cursor:pointer;}
 .table{width:100%;border-collapse:collapse;}
 td,th{padding:6px;border-bottom:1px solid #444;}
-#adminPanel,#clientPanel{display:none;}
+#adminPanel,#clientPanel,#clientForm{display:none;}
 input{width:95%;}
 #searchInput{font-size:18px;width:98%;}
+.topBox{padding:10px;}
 </style>
 </head>
 
 <body>
 
-<h2>Tailor PRO FINAL</h2>
-
 <!-- LOGIN -->
 <div id="loginPanel">
-<input id="pass" placeholder="Admin Password">
+<h2>Admin Login</h2>
+<input id="pass" placeholder="Password">
 <button onclick="login()">Login</button>
 </div>
 
 <!-- ADMIN -->
 <div id="adminPanel">
-
 <h3>Admin Panel</h3>
-<button onclick="changePassword()">Change Password</button><br>
 
 <input id="shopId" placeholder="Shop ID">
 <input id="shopNameInput" placeholder="Shop Name">
@@ -45,32 +43,36 @@ input{width:95%;}
 
 <table class="table">
 <thead>
-<tr>
-<th>ID</th><th>Name</th><th>Phone</th>
-<th>Total</th><th>Link</th><th>Action</th>
-</tr>
+<tr><th>ID</th><th>Name</th><th>Phone</th><th>Total</th><th>Link</th><th>Action</th></tr>
 </thead>
 <tbody id="shopTable"></tbody>
 </table>
-
 </div>
 
-<!-- CLIENT -->
+<!-- SHOP PAGE -->
 <div id="clientPanel">
 
+<div class="topBox">
 <h2 id="shopName"></h2>
 <p id="shopPhone"></p>
 <p id="shopAddress"></p>
 <h3 id="totalClients"></h3>
 
+<button onclick="showForm()">➕ Add New Client</button>
+<button onclick="importData()">📥 Import</button>
+<button onclick="exportData()">📤 Export</button>
+</div>
+
 <input id="searchInput" placeholder="Search Name / Phone / Book">
 
+<!-- CLIENT FORM -->
+<div id="clientForm">
 <input id="nameInput" placeholder="Client Name">
 <input id="mobileInput" placeholder="Mobile">
 <input id="serialInput" placeholder="Book No">
 <input type="file" id="imageInput">
-
-<button onclick="saveClient()">Save Client</button>
+<button onclick="saveClient()">Save</button>
+</div>
 
 <table class="table">
 <thead>
@@ -107,12 +109,6 @@ function login(){
  }else alert("Wrong Password");
 }
 
-/* CHANGE PASSWORD */
-function changePassword(){
- let p=prompt("New Password");
- if(p){adminPass=p;alert("Updated");}
-}
-
 /* SAVE SHOP */
 async function saveShop(){
  if(editShopId){
@@ -132,27 +128,6 @@ async function saveShop(){
    address:shopAddressInput.value
   });
  }
- alert("Saved");
- loadShops();
-}
-
-/* EDIT SHOP */
-async function editShop(id){
- let snap=await db.collection("shops").where("id","==",id).get();
- snap.forEach(d=>{
-  let s=d.data();
-  shopId.value=s.id;
-  shopNameInput.value=s.name;
-  shopPhoneInput.value=s.phone;
-  shopAddressInput.value=s.address;
-  editShopId=id;
- });
-}
-
-/* DELETE SHOP */
-async function deleteShop(id){
- let snap=await db.collection("shops").where("id","==",id).get();
- snap.forEach(d=>db.collection("shops").doc(d.id).delete());
  loadShops();
 }
 
@@ -181,26 +156,29 @@ async function loadShops(){
  shopTable.innerHTML=html;
 }
 
-/* AUTO SHOP */
+/* SHOP OPEN */
 let params=new URLSearchParams(location.search);
 if(params.get("shop")){
  loginPanel.style.display="none";
- openShopDirect(params.get("shop"));
+ openShop(params.get("shop"));
 }
 
-async function openShopDirect(id){
+async function openShop(id){
  let snap=await db.collection("shops").where("id","==",id).get();
- snap.forEach(d=>openShop(d.data()));
+ snap.forEach(d=>{
+  let s=d.data();
+  currentShop=s.id;
+  clientPanel.style.display="block";
+  shopName.innerText=s.name;
+  shopPhone.innerText=s.phone;
+  shopAddress.innerText=s.address;
+  loadClients();
+ });
 }
 
-function openShop(s){
- currentShop=s.id;
- adminPanel.style.display="none";
- clientPanel.style.display="block";
- shopName.innerText=s.name;
- shopPhone.innerText=s.phone;
- shopAddress.innerText=s.address;
- loadClients();
+/* SHOW FORM */
+function showForm(){
+ clientForm.style.display="block";
 }
 
 /* IMAGE UPLOAD */
@@ -215,7 +193,6 @@ async function uploadImage(file){
 
 /* SAVE CLIENT */
 async function saveClient(){
- alert("Saving...");
  let img="";
  if(imageInput.files[0]){
   img=await uploadImage(imageInput.files[0]);
@@ -236,25 +213,23 @@ async function saveClient(){
   await db.collection("clients").add(obj);
  }
 
- alert("Saved ✅");
+ clientForm.style.display="none";
  loadClients();
 }
 
 /* LOAD CLIENT */
 async function loadClients(){
  let snap=await db.collection("clients").where("shop","==",currentShop).get();
-
  let arr=[];
  snap.forEach(d=>arr.push({...d.data(),id:d.id}));
 
  totalClients.innerText="Total Clients: "+arr.length;
-
  arr=arr.slice(-10).reverse();
- renderClients(arr);
+ render(arr);
 }
 
 /* RENDER */
-function renderClients(arr){
+function render(arr){
  let html="";
  arr.forEach(r=>{
  html+=`<tr>
@@ -263,9 +238,9 @@ function renderClients(arr){
  <td>${r.serial}</td>
  <td>${r.image?`<img src="${r.image}" width="40">`:""}</td>
  <td>
-  <button onclick='editClient(${JSON.stringify(r)})'>✏️</button>
-  <button onclick="deleteClient('${r.id}')">🗑️</button>
-  <button onclick='printSlip(${JSON.stringify(r)})'>🖨️</button>
+ <button onclick='editClient(${JSON.stringify(r)})'>✏️</button>
+ <button onclick="deleteClient('${r.id}')">🗑️</button>
+ <button onclick='printSlip(${JSON.stringify(r)})'>🖨️</button>
  </td>
  </tr>`;
  });
@@ -276,7 +251,6 @@ function renderClients(arr){
 searchInput.oninput=async function(){
  let v=this.value.toLowerCase();
  let snap=await db.collection("clients").where("shop","==",currentShop).get();
-
  let arr=[];
  snap.forEach(d=>{
   let r={...d.data(),id:d.id};
@@ -284,125 +258,60 @@ searchInput.oninput=async function(){
    arr.push(r);
   }
  });
-
- renderClients(arr);
+ render(arr);
 };
 
-/* DELETE CLIENT */
+/* PRINT ONE PAGE */
+function printSlip(r){
+ let w=window.open("");
+ w.document.write(`
+ <html>
+ <head>
+ <style>
+ @page{size:A4;margin:0;}
+ body{margin:0;font-family:Arial;}
+ .box{width:210mm;height:297mm;padding:10mm;overflow:hidden;text-align:center;}
+ img{width:100%;height:150mm;object-fit:contain;}
+ </style>
+ </head>
+ <body onload="window.print()">
+ <div class="box">
+ <h2>${shopName.innerText}</h2>
+ <p>${shopPhone.innerText}</p>
+ <p>${shopAddress.innerText}</p>
+ <hr>
+ <h3>${r.name}</h3>
+ <p>${r.mobile}</p>
+ <p>Book: ${r.serial}</p>
+ ${r.image?`<img src="${r.image}">`:""}
+ </div>
+ </body>
+ </html>
+ `);
+ w.document.close();
+}
+
+/* DELETE */
 async function deleteClient(id){
  await db.collection("clients").doc(id).delete();
  loadClients();
 }
 
-/* EDIT CLIENT */
+/* EDIT */
 function editClient(r){
+ showForm();
  nameInput.value=r.name;
  mobileInput.value=r.mobile;
  serialInput.value=r.serial;
  editClientId=r.id;
 }
 
-/* PRINT */
-/* PERFECT ONE PAGE PRINT */
-function printSlip(r){
-
-let w = window.open("");
-
-w.document.write(`
-<html>
-<head>
-<title>Print</title>
-
-<style>
-@page {
- size: A4;
- margin: 0;
+/* IMPORT EXPORT */
+function exportData(){
+ alert("Export coming next");
 }
-
-body{
- margin:0;
- font-family:Arial;
-}
-
-.container{
- width:210mm;
- height:297mm;
- padding:10mm;
- box-sizing:border-box;
- overflow:hidden; /* 🔥 prevents 2nd page */
- text-align:center;
-}
-
-h2{margin:5px;}
-p{margin:3px;}
-
-img{
- width:100%;
- height:150mm; /* 🔥 FIXED HEIGHT */
- object-fit:contain;
-}
-
-hr{margin:5px 0;}
-
-</style>
-
-</head>
-
-<body onload="window.print()">
-
-<div class="container">
-
-<h2>${shopName.innerText}</h2>
-<p>${shopPhone.innerText}</p>
-<p>${shopAddress.innerText}</p>
-
-<hr>
-
-<h3>${r.name}</h3>
-<p>${r.mobile}</p>
-<p>Book No: ${r.serial}</p>
-
-${r.image ? `<img src="${r.image}">` : ""}
-
-</div>
-
-</body>
-</html>
-`);
-
-w.document.close();
-}
- <html>
- <head>
- <style>
- body{font-family:Arial;text-align:center;margin:0;}
- .box{width:794px;height:1123px;padding:20px;}
- img{width:100%;height:800px;object-fit:contain;}
- </style>
- </head>
-
- <body onload="window.print()">
-
- <div class="box">
- <h2>${shopName.innerText}</h2>
- <p>${shopPhone.innerText}</p>
- <p>${shopAddress.innerText}</p>
-
- <hr>
-
- <h3>${r.name}</h3>
- <p>${r.mobile}</p>
- <p>Book: ${r.serial}</p>
-
- ${r.image?`<img src="${r.image}">`:""}
-
- </div>
-
- </body>
- </html>
- `);
-
- w.document.close();
+function importData(){
+ alert("Import coming next");
 }
 
 </script>
