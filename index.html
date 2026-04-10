@@ -2,12 +2,12 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Tailor Pro Live</title>
+<title>Tailor Full Pro</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<!-- Firebase v8 (WORKING for HTML) -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <style>
 body{font-family:Arial;background:#0f172a;color:white;text-align:center;}
@@ -21,7 +21,7 @@ td,th{padding:6px;border-bottom:1px solid #444;}
 
 <body>
 
-<h2>Tailor Pro (Live)</h2>
+<h2>Tailor FULL PRO</h2>
 
 <div id="loginPanel">
 <input id="pass" placeholder="Password">
@@ -29,17 +29,17 @@ td,th{padding:6px;border-bottom:1px solid #444;}
 </div>
 
 <div id="adminPanel">
-<h3>Admin Panel</h3>
+<h3>Admin</h3>
 
 <input id="shopId" placeholder="Shop ID">
 <input id="shopNameInput" placeholder="Shop Name">
 <input id="shopPhoneInput" placeholder="Phone">
 <input id="shopAddressInput" placeholder="Address">
 
-<button onclick="saveShop()">Save Shop</button>
+<button onclick="saveShop()">Save</button>
 
 <table class="table">
-<thead><tr><th>ID</th><th>Name</th><th>Total</th><th>Open</th></tr></thead>
+<thead><tr><th>ID</th><th>Name</th><th>Total</th><th>Link</th><th>Action</th></tr></thead>
 <tbody id="shopTable"></tbody>
 </table>
 </div>
@@ -51,15 +51,21 @@ td,th{padding:6px;border-bottom:1px solid #444;}
 <p id="shopAddress"></p>
 <h3 id="totalClients"></h3>
 
+<input id="searchInput" placeholder="Search..." style="width:95%;font-size:18px;">
+
+<br>
+
 <input id="nameInput" placeholder="Name">
 <input id="mobileInput" placeholder="Mobile">
 <input id="serialInput" placeholder="Book No">
 <input type="file" id="imageInput">
 
-<button onclick="saveClient()">Save Client</button>
+<button onclick="saveClient()">Save</button>
+<button onclick="exportJSON()">Export</button>
+<input type="file" id="importFile" onchange="importJSON()">
 
 <table class="table">
-<thead><tr><th>Name</th><th>Mobile</th><th>Book</th><th>Image</th></tr></thead>
+<thead><tr><th>Name</th><th>Mobile</th><th>Book</th><th>Img</th><th>Action</th></tr></thead>
 <tbody id="clientTable"></tbody>
 </table>
 
@@ -67,15 +73,15 @@ td,th{padding:6px;border-bottom:1px solid #444;}
 
 <script>
 
-// ✅ YOUR FIREBASE CONFIG (FIXED)
 firebase.initializeApp({
   apiKey: "AIzaSyAoChlrCKNFO0JvJYnPAx7d8zAd9zXiJuI",
   authDomain: "tailor-pro-new-9e723.firebaseapp.com",
   projectId: "tailor-pro-new-9e723"
 });
 
-let db = firebase.firestore();
+let db=firebase.firestore();
 let currentShop="";
+let editId=null;
 
 /* LOGIN */
 function login(){
@@ -83,40 +89,56 @@ function login(){
    loginPanel.style.display="none";
    adminPanel.style.display="block";
    loadShops();
- } else alert("Wrong Password");
-}
-
-/* SAVE SHOP */
-async function saveShop(){
- try{
-  await db.collection("shops").add({
-    id:shopId.value,
-    name:shopNameInput.value,
-    phone:shopPhoneInput.value,
-    address:shopAddressInput.value
-  });
-  alert("Shop Saved ✅");
-  loadShops();
- }catch(e){
-  alert("Error: "+e.message);
  }
 }
 
-/* LOAD SHOPS */
+/* SHOP CRUD */
+async function saveShop(){
+ await db.collection("shops").add({
+   id:shopId.value,
+   name:shopNameInput.value,
+   phone:shopPhoneInput.value,
+   address:shopAddressInput.value
+ });
+ loadShops();
+}
+
+async function deleteShop(id){
+ let snap=await db.collection("shops").where("id","==",id).get();
+ snap.forEach(d=>db.collection("shops").doc(d.id).delete());
+ loadShops();
+}
+
+/* LOAD SHOP */
 async function loadShops(){
  let snap=await db.collection("shops").get();
  let html="";
- for(let d of snap.docs){
+ snap.forEach(d=>{
    let s=d.data();
-   let c=await db.collection("clients").where("shop","==",s.id).get();
+   let link=location.origin+location.pathname+"?shop="+s.id;
    html+=`<tr>
      <td>${s.id}</td>
      <td>${s.name}</td>
-     <td>${c.size}</td>
-     <td><button onclick="openShop('${s.id}','${s.name}','${s.phone}','${s.address}')">Open</button></td>
+     <td>-</td>
+     <td><a href="${link}" target="_blank">Open</a></td>
+     <td><button onclick="deleteShop('${s.id}')">🗑️</button></td>
    </tr>`;
- }
+ });
  shopTable.innerHTML=html;
+}
+
+/* AUTO OPEN SHOP */
+let url=new URL(location.href);
+let sid=url.searchParams.get("shop");
+if(sid){ openShopDirect(sid); }
+
+/* DIRECT OPEN */
+async function openShopDirect(id){
+ let snap=await db.collection("shops").where("id","==",id).get();
+ snap.forEach(d=>{
+   let s=d.data();
+   openShop(s.id,s.name,s.phone,s.address);
+ });
 }
 
 /* OPEN SHOP */
@@ -124,54 +146,47 @@ function openShop(id,name,phone,address){
  currentShop=id;
  adminPanel.style.display="none";
  clientPanel.style.display="block";
-
  shopName.innerText=name;
  shopPhone.innerText=phone;
  shopAddress.innerText=address;
-
  loadClients();
 }
 
-/* IMAGE UPLOAD (Cloudinary) */
+/* IMAGE */
 function uploadImage(file){
- return new Promise((resolve)=>{
+ return new Promise(r=>{
   let fd=new FormData();
   fd.append("file",file);
   fd.append("upload_preset","unsigned_preset");
 
-  fetch("https://api.cloudinary.com/v1_1/da1m4wmdb/image/upload",{
-    method:"POST",
-    body:fd
-  })
-  .then(r=>r.json())
-  .then(d=>resolve(d.secure_url));
+  fetch("https://api.cloudinary.com/v1_1/da1m4wmdb/image/upload",{method:"POST",body:fd})
+  .then(res=>res.json()).then(d=>r(d.secure_url));
  });
 }
 
-/* SAVE CLIENT */
+/* CLIENT SAVE */
 async function saveClient(){
- try{
-  let file=imageInput.files[0];
-  let img="";
+ let file=imageInput.files[0];
+ let img="";
 
-  if(file){
-    img = await uploadImage(file);
-  }
+ if(file){ img=await uploadImage(file); }
 
-  await db.collection("clients").add({
-    shop:currentShop,
-    name:nameInput.value,
-    mobile:mobileInput.value,
-    serial:serialInput.value,
-    image:img
-  });
+ let obj={
+   shop:currentShop,
+   name:nameInput.value,
+   mobile:mobileInput.value,
+   serial:serialInput.value,
+   image:img
+ };
 
-  alert("Client Saved ✅");
-  loadClients();
-
- }catch(e){
-  alert("Error: "+e.message);
+ if(editId){
+   db.collection("clients").doc(editId).update(obj);
+   editId=null;
+ } else {
+   db.collection("clients").add(obj);
  }
+
+ loadClients();
 }
 
 /* LOAD CLIENT */
@@ -182,18 +197,90 @@ async function loadClients(){
  let total=0;
 
  snap.forEach(d=>{
-   let r=d.data();
+   let r={...d.data(),id:d.id};
    total++;
+
    html+=`<tr>
      <td>${r.name}</td>
      <td>${r.mobile}</td>
      <td>${r.serial}</td>
      <td>${r.image?`<img src="${r.image}" width="40">`:""}</td>
+     <td>
+       <button onclick='editClient(${JSON.stringify(r)})'>✏️</button>
+       <button onclick="deleteClient('${r.id}')">🗑️</button>
+       <button onclick='downloadPDF(${JSON.stringify(r)})'>📄</button>
+     </td>
    </tr>`;
  });
 
  totalClients.innerText="Total Clients: "+total;
  clientTable.innerHTML=html;
+}
+
+/* DELETE */
+async function deleteClient(id){
+ await db.collection("clients").doc(id).delete();
+ loadClients();
+}
+
+/* EDIT */
+function editClient(r){
+ nameInput.value=r.name;
+ mobileInput.value=r.mobile;
+ serialInput.value=r.serial;
+ editId=r.id;
+}
+
+/* SEARCH */
+searchInput.oninput=async function(){
+ let v=this.value.toLowerCase();
+ let snap=await db.collection("clients").where("shop","==",currentShop).get();
+
+ let html="";
+ snap.forEach(d=>{
+   let r=d.data();
+   if(r.name.toLowerCase().includes(v)||r.mobile.includes(v)){
+     html+=`<tr><td>${r.name}</td><td>${r.mobile}</td><td>${r.serial}</td></tr>`;
+   }
+ });
+ clientTable.innerHTML=html;
+};
+
+/* EXPORT */
+function exportJSON(){
+ db.collection("clients").where("shop","==",currentShop).get().then(snap=>{
+   let arr=[];
+   snap.forEach(d=>arr.push(d.data()));
+   let blob=new Blob([JSON.stringify(arr)],{type:"application/json"});
+   let a=document.createElement("a");
+   a.href=URL.createObjectURL(blob);
+   a.download="clients.json";
+   a.click();
+ });
+}
+
+/* IMPORT */
+function importJSON(){
+ let file=importFile.files[0];
+ let reader=new FileReader();
+ reader.onload=function(){
+   let data=JSON.parse(reader.result);
+   data.forEach(d=>{
+     db.collection("clients").add(d);
+   });
+   loadClients();
+ };
+ reader.readAsText(file);
+}
+
+/* PDF */
+function downloadPDF(r){
+ let el=document.createElement("div");
+ el.innerHTML=`<h2>${shopName.innerText}</h2>
+ <p>${r.name}</p>
+ <p>${r.mobile}</p>
+ ${r.image?`<img src="${r.image}" style="max-width:100%">`:""}`;
+ html2pdf().from(el).save(r.name+".pdf");
 }
 
 </script>
