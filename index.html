@@ -303,8 +303,79 @@ function showForm(){
 }
 
 /* IMPORT EXPORT */
-function exportData(){alert("Working");}
-function importData(){alert("Working");}
+<script>
+
+/* EXPORT DATA (REAL WORKING) */
+async function exportData(){
+
+ let snap = await db.collection("clients")
+   .where("shop","==",currentShop).get();
+
+ let arr = [];
+
+ snap.forEach(d=>{
+   let data = d.data();
+   delete data.shop; // clean export
+   arr.push(data);
+ });
+
+ let json = JSON.stringify(arr, null, 2);
+
+ let blob = new Blob([json], {type:"application/json"});
+ let url = URL.createObjectURL(blob);
+
+ let a = document.createElement("a");
+ a.href = url;
+ a.download = "clients_backup_"+currentShop+".json";
+ a.click();
+
+ URL.revokeObjectURL(url);
+
+ alert("Export Done ✅");
+}
+
+
+/* IMPORT DATA (REAL WORKING) */
+function importData(){
+
+ let input = document.createElement("input");
+ input.type = "file";
+ input.accept = ".json";
+
+ input.onchange = async function(e){
+
+   let file = e.target.files[0];
+   if(!file) return;
+
+   let text = await file.text();
+
+   try{
+
+     let data = JSON.parse(text);
+
+     if(!Array.isArray(data)){
+       alert("Invalid file ❌");
+       return;
+     }
+
+     for(let d of data){
+       await db.collection("clients").add({
+         ...d,
+         shop: currentShop
+       });
+     }
+
+     alert("Import Successful ✅");
+     loadClients();
+
+   }catch(err){
+     alert("Error in file ❌");
+   }
+
+ };
+
+ input.click();
+}
 
 </script>
 
